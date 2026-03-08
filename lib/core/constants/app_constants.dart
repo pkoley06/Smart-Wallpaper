@@ -9,6 +9,7 @@ class AppConstants {
   static const String tableSubscriptions = 'subscriptions';
   static const String tableSubscriptionPlans = 'subscription_plans';
   static const String tableAppConfig = 'app_config';
+  static const String tableDownloads = 'downloads';
 
   // Storage Buckets
   static const String bucketWallpapers = 'wallpapers';

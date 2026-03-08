@@ -4,11 +4,14 @@ import 'package:cached_network_image/cached_network_image.dart';
 import 'package:smart_wallpaper/core/di/injection_container.dart';
 import 'package:smart_wallpaper/core/theme/app_theme.dart';
 import 'package:smart_wallpaper/features/wallpapers/domain/entities/wallpaper_entity.dart';
-import 'package:smart_wallpaper/features/wallpapers/presentation/providers/auth_provider.dart';
+import 'package:smart_wallpaper/features/wallpapers/presentation/providers/subscription_provider.dart';
+import 'package:smart_wallpaper/features/wallpapers/presentation/pages/subscription_screen.dart';
 import 'package:smart_wallpaper/features/wallpapers/presentation/services/wallpaper_action_service.dart';
 import 'package:smart_wallpaper/features/wallpapers/presentation/widgets/resolution_selector.dart';
 import 'package:smart_wallpaper/features/wallpapers/presentation/widgets/set_wallpaper_dialog.dart';
-import 'package:smart_wallpaper/features/wallpapers/presentation/widgets/similar_wallpapers_list.dart';
+import 'package:smart_wallpaper/features/wallpapers/presentation/providers/similar_wallpaper_provider.dart';
+import 'package:smart_wallpaper/features/wallpapers/presentation/widgets/wallpaper_card.dart';
+import 'package:smart_wallpaper/features/wallpapers/presentation/services/download_tracking_service.dart';
 import 'package:gap/gap.dart';
 
 class WallpaperDetailScreen extends ConsumerStatefulWidget {
@@ -63,7 +66,8 @@ class _WallpaperDetailScreenState extends ConsumerState<WallpaperDetailScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final isPremium = ref.watch(authNotifierProvider);
+    final subState = ref.watch(subscriptionProvider);
+    final isPremium = subState.isPremium;
     final actionService = sl<WallpaperActionService>();
 
     return Scaffold(
@@ -140,59 +144,68 @@ class _WallpaperDetailScreenState extends ConsumerState<WallpaperDetailScreen> {
                       topRight: Radius.circular(24),
                     ),
                   ),
-                  child: ListView(
+                  child: CustomScrollView(
                     controller: scrollController,
-                    padding: const EdgeInsets.symmetric(
-                      horizontal: 20,
-                      vertical: 20,
-                    ),
-                    children: [
-                      // Handle bar
-                      Center(
-                        child: Container(
-                          width: 40,
-                          height: 4,
-                          decoration: BoxDecoration(
-                            color: Colors.white24,
-                            borderRadius: BorderRadius.circular(2),
-                          ),
+                    slivers: [
+                      SliverPadding(
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 20,
+                          vertical: 20,
+                        ),
+                        sliver: SliverList(
+                          delegate: SliverChildListDelegate([
+                            // Handle bar
+                            Center(
+                              child: Container(
+                                width: 40,
+                                height: 4,
+                                decoration: BoxDecoration(
+                                  color: Colors.white24,
+                                  borderRadius: BorderRadius.circular(2),
+                                ),
+                              ),
+                            ),
+                            const Gap(16),
+
+                            // Premium badge
+                            if (_currentWallpaper.isPremium) ...[
+                              _buildPremiumBadge(),
+                              const Gap(12),
+                            ],
+
+                            // Action buttons
+                            _buildActionButtons(
+                              context,
+                              ref,
+                              actionService,
+                              isPremium,
+                              _currentWallpaper,
+                            ),
+                            const Gap(30),
+
+                            // Similar wallpapers header
+                            const Text(
+                              'Similar Wallpapers',
+                              style: TextStyle(
+                                color: Colors.white,
+                                fontSize: 16,
+                                fontWeight: FontWeight.bold,
+                              ),
+                            ),
+                            const Gap(12),
+                          ]),
                         ),
                       ),
-                      const Gap(16),
 
-                      // Premium badge
-                      if (_currentWallpaper.isPremium) ...[
-                        _buildPremiumBadge(),
-                        const Gap(12),
-                      ],
-
-                      // Pexels branding
-                      if (_currentWallpaper.id.startsWith('pexels_')) ...[
-                        Image.network(
-                          'https://images.pexels.com/lib/api/pexels-white.png',
-                          width: 70,
-                          fit: BoxFit.contain,
-                          alignment: Alignment.centerLeft,
+                      // Similar wallpapers grid using Sliver
+                      SliverPadding(
+                        padding: const EdgeInsets.only(
+                          left: 20,
+                          right: 20,
+                          bottom: 50,
                         ),
-                        const Gap(16),
-                      ],
-
-                      // Action buttons
-                      _buildActionButtons(
-                        context,
-                        ref,
-                        actionService,
-                        isPremium,
-                        _currentWallpaper,
+                        sliver: _buildSimilarWallpapersSliver(ref),
                       ),
-                      const Gap(30),
-
-                      // Similar wallpapers
-                      SimilarWallpapersList(
-                        wallpaperId: _currentWallpaper.id,
-                        tags: _currentWallpaper.title,
-                      ),
-                      const Gap(30),
                     ],
                   ),
                 );
@@ -231,6 +244,39 @@ class _WallpaperDetailScreenState extends ConsumerState<WallpaperDetailScreen> {
               ),
             ),
           ),
+
+          // [LAYER 5.5] Pexels icon top-right
+          if (_currentWallpaper.id.startsWith('pexels_'))
+            AnimatedOpacity(
+              opacity: _showOverlay ? 1.0 : 0.0,
+              duration: const Duration(milliseconds: 250),
+              child: IgnorePointer(
+                child: SafeArea(
+                  child: Align(
+                    alignment: Alignment.topRight,
+                    child: Padding(
+                      padding: const EdgeInsets.only(right: 16, top: 12),
+                      child: Container(
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 6,
+                          vertical: 3,
+                        ),
+                        decoration: BoxDecoration(
+                          color: Colors.black.withOpacity(0.4),
+                          borderRadius: BorderRadius.circular(6),
+                        ),
+                        child: Image.network(
+                          'https://images.pexels.com/lib/api/pexels-white.png',
+                          width: 40,
+                          fit: BoxFit.contain,
+                          errorBuilder: (_, __, ___) => const SizedBox.shrink(),
+                        ),
+                      ),
+                    ),
+                  ),
+                ),
+              ),
+            ),
 
           // [LAYER 6] Page indicator dots
           AnimatedOpacity(
@@ -319,6 +365,88 @@ class _WallpaperDetailScreenState extends ConsumerState<WallpaperDetailScreen> {
     );
   }
 
+  void _showPremiumPrompt(BuildContext context) {
+    showModalBottomSheet(
+      context: context,
+      backgroundColor: Colors.transparent,
+      builder: (ctx) => Container(
+        padding: const EdgeInsets.all(24),
+        decoration: BoxDecoration(
+          color: AppTheme.surfaceColor,
+          borderRadius: const BorderRadius.only(
+            topLeft: Radius.circular(24),
+            topRight: Radius.circular(24),
+          ),
+        ),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Container(
+              width: 40,
+              height: 4,
+              decoration: BoxDecoration(
+                color: Colors.white24,
+                borderRadius: BorderRadius.circular(2),
+              ),
+            ),
+            const Gap(20),
+            const Icon(
+              Icons.workspace_premium,
+              color: Color(0xFFFFD700),
+              size: 48,
+            ),
+            const Gap(12),
+            const Text(
+              'Premium Required',
+              style: TextStyle(
+                color: Colors.white,
+                fontSize: 20,
+                fontWeight: FontWeight.bold,
+              ),
+            ),
+            const Gap(8),
+            Text(
+              'Upgrade to Premium to download and set\npremium wallpapers.',
+              textAlign: TextAlign.center,
+              style: TextStyle(
+                color: Colors.white.withOpacity(0.5),
+                fontSize: 14,
+              ),
+            ),
+            const Gap(20),
+            SizedBox(
+              width: double.infinity,
+              child: ElevatedButton(
+                onPressed: () {
+                  Navigator.pop(ctx);
+                  Navigator.push(
+                    context,
+                    MaterialPageRoute(
+                      builder: (_) => const SubscriptionScreen(),
+                    ),
+                  );
+                },
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: const Color(0xFFFFD700),
+                  foregroundColor: Colors.black,
+                  padding: const EdgeInsets.symmetric(vertical: 14),
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(14),
+                  ),
+                ),
+                child: const Text(
+                  'View Premium Plans',
+                  style: TextStyle(fontWeight: FontWeight.bold, fontSize: 15),
+                ),
+              ),
+            ),
+            const Gap(16),
+          ],
+        ),
+      ),
+    );
+  }
+
   Widget _buildActionButtons(
     BuildContext context,
     WidgetRef ref,
@@ -326,17 +454,25 @@ class _WallpaperDetailScreenState extends ConsumerState<WallpaperDetailScreen> {
     bool isPremium,
     WallpaperEntity currentWallpaper,
   ) {
+    final needsPremium = currentWallpaper.isPremium && !isPremium;
+
     return Row(
       children: [
         Expanded(
           flex: 2,
           child: ElevatedButton(
-            onPressed: () => _showResolutionSelector(
-              context,
-              isPremium,
-              actionService,
-              currentWallpaper,
-            ),
+            onPressed: () {
+              if (needsPremium) {
+                _showPremiumPrompt(context);
+                return;
+              }
+              _showResolutionSelector(
+                context,
+                isPremium,
+                actionService,
+                currentWallpaper,
+              );
+            },
             style: ElevatedButton.styleFrom(
               backgroundColor: AppTheme.primaryColor,
               foregroundColor: Colors.white,
@@ -346,14 +482,20 @@ class _WallpaperDetailScreenState extends ConsumerState<WallpaperDetailScreen> {
               ),
               elevation: 0,
             ),
-            child: const Row(
+            child: Row(
               mainAxisAlignment: MainAxisAlignment.center,
               children: [
-                Icon(Icons.download_rounded, size: 20),
-                Gap(8),
+                Icon(
+                  needsPremium ? Icons.lock_rounded : Icons.download_rounded,
+                  size: 20,
+                ),
+                const Gap(8),
                 Text(
-                  'Download',
-                  style: TextStyle(fontWeight: FontWeight.w600, fontSize: 14),
+                  needsPremium ? 'Unlock Premium' : 'Download',
+                  style: const TextStyle(
+                    fontWeight: FontWeight.w600,
+                    fontSize: 14,
+                  ),
                 ),
               ],
             ),
@@ -362,11 +504,13 @@ class _WallpaperDetailScreenState extends ConsumerState<WallpaperDetailScreen> {
         const Gap(10),
         Expanded(
           child: OutlinedButton(
-            onPressed: () => _showSetWallpaperDialog(
-              context,
-              actionService,
-              currentWallpaper,
-            ),
+            onPressed: () {
+              if (needsPremium) {
+                _showPremiumPrompt(context);
+                return;
+              }
+              _showSetWallpaperDialog(context, actionService, currentWallpaper);
+            },
             style: OutlinedButton.styleFrom(
               foregroundColor: Colors.white,
               padding: const EdgeInsets.symmetric(vertical: 16),
@@ -389,7 +533,7 @@ class _WallpaperDetailScreenState extends ConsumerState<WallpaperDetailScreen> {
     WallpaperEntity currentWallpaper,
   ) {
     if (currentWallpaper.resolutions == null) {
-      _performDownload(service, currentWallpaper.urlHighRes);
+      _performDownload(service, currentWallpaper.urlHighRes, 'original');
       return;
     }
 
@@ -401,7 +545,7 @@ class _WallpaperDetailScreenState extends ConsumerState<WallpaperDetailScreen> {
         isPremiumUser: isPremium,
         onSelected: (key, url) {
           Navigator.pop(bottomSheetContext);
-          _performDownload(service, url);
+          _performDownload(service, url, key);
         },
       ),
     );
@@ -410,8 +554,17 @@ class _WallpaperDetailScreenState extends ConsumerState<WallpaperDetailScreen> {
   Future<void> _performDownload(
     WallpaperActionService service,
     String url,
+    String resolution,
   ) async {
     _setLoading(true, 'Downloading wallpaper...');
+
+    // Track download in Supabase
+    final trackingService = sl<DownloadTrackingService>();
+    trackingService.trackDownload(
+      wallpaperId: _currentWallpaper.id,
+      resolution: resolution,
+    );
+
     final errorMsg = await service.downloadToGallery(url);
     _setLoading(false);
     if (!mounted) return;
@@ -471,6 +624,90 @@ class _WallpaperDetailScreenState extends ConsumerState<WallpaperDetailScreen> {
             );
           }
         },
+      ),
+    );
+  }
+
+  Widget _buildSimilarWallpapersSliver(WidgetRef ref) {
+    final similarAsync = ref.watch(
+      similarWallpapersNotifierProvider(
+        _currentWallpaper.id,
+        tags: _currentWallpaper.title,
+      ),
+    );
+
+    return similarAsync.when(
+      data: (wallpapers) {
+        if (wallpapers.isEmpty) {
+          return SliverToBoxAdapter(
+            child: Padding(
+              padding: const EdgeInsets.only(top: 8),
+              child: Text(
+                'No similar wallpapers found.',
+                style: TextStyle(color: Colors.white.withOpacity(0.3)),
+              ),
+            ),
+          );
+        }
+
+        final notifier = ref.read(
+          similarWallpapersNotifierProvider(
+            _currentWallpaper.id,
+            tags: _currentWallpaper.title,
+          ).notifier,
+        );
+
+        return SliverGrid(
+          gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+            crossAxisCount: 3,
+            childAspectRatio: 0.65,
+            mainAxisSpacing: 6,
+            crossAxisSpacing: 6,
+          ),
+          delegate: SliverChildBuilderDelegate((context, index) {
+            // Prefetch: trigger 3 items before end
+            if (index >= wallpapers.length - 3 && notifier.hasMore) {
+              notifier.loadMore();
+            }
+
+            final wallpaper = wallpapers[index];
+            return WallpaperCard(
+              wallpaper: wallpaper,
+              onTap: () {
+                Navigator.pushReplacement(
+                  context,
+                  MaterialPageRoute(
+                    builder: (context) => WallpaperDetailScreen(
+                      wallpapers: wallpapers,
+                      initialIndex: index,
+                    ),
+                  ),
+                );
+              },
+            );
+          }, childCount: wallpapers.length),
+        );
+      },
+      loading: () => const SliverToBoxAdapter(
+        child: Padding(
+          padding: EdgeInsets.symmetric(vertical: 24),
+          child: Center(
+            child: SizedBox(
+              width: 24,
+              height: 24,
+              child: CircularProgressIndicator(
+                color: AppTheme.primaryColor,
+                strokeWidth: 2,
+              ),
+            ),
+          ),
+        ),
+      ),
+      error: (err, stack) => SliverToBoxAdapter(
+        child: Text(
+          'Could not load similar wallpapers.',
+          style: TextStyle(color: Colors.white.withOpacity(0.3)),
+        ),
       ),
     );
   }

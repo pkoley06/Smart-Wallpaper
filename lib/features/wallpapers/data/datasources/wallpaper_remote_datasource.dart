@@ -106,16 +106,23 @@ class SupabaseWallpaperDataSource implements WallpaperRemoteDataSource {
 
         return photos.map((photo) {
           final src = photo['src'] as Map<String, dynamic>;
+          final int photoWidth = photo['width'] ?? 0;
+          final int photoHeight = photo['height'] ?? 0;
+          final bool is4K = photoWidth >= 3840 || photoHeight >= 3840;
+
           return WallpaperModel(
             id: 'pexels_${photo['id']}',
             title: photo['alt'] ?? 'Wallpaper',
             urlLowRes: src['large'] ?? src['medium'] ?? '',
             urlHighRes: src['original'] ?? src['large2x'] ?? '',
             sourceApi: 'pexels',
+            isPremium: is4K,
             createdAt: DateTime.now(),
-            resolutions: src.map(
-              (key, value) => MapEntry(key, value.toString()),
-            ),
+            resolutions: {
+              ...src.map((key, value) => MapEntry(key, value.toString())),
+              '_width': photoWidth.toString(),
+              '_height': photoHeight.toString(),
+            },
           );
         }).toList();
       } else {

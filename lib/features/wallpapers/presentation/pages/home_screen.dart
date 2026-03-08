@@ -1,8 +1,11 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:smart_wallpaper/core/theme/app_theme.dart';
 import 'package:smart_wallpaper/features/wallpapers/presentation/pages/wallpaper_detail_screen.dart';
 import 'package:smart_wallpaper/features/wallpapers/presentation/pages/search_screen.dart';
+import 'package:smart_wallpaper/features/wallpapers/presentation/providers/auth_provider.dart';
+import 'package:smart_wallpaper/features/wallpapers/presentation/pages/subscription_screen.dart';
 import 'package:smart_wallpaper/features/wallpapers/presentation/providers/category_provider.dart';
 import 'package:smart_wallpaper/features/wallpapers/presentation/providers/wallpaper_provider.dart';
 import 'package:smart_wallpaper/features/wallpapers/presentation/widgets/wallpaper_card.dart';
@@ -60,7 +63,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
                     child: Row(
                       children: [
                         const Text(
-                          'Wallpapers',
+                          'Vista',
                           style: TextStyle(
                             fontSize: 22,
                             fontWeight: FontWeight.bold,
@@ -86,6 +89,32 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
                             ),
                           ),
                         ),
+                        const Gap(4),
+                        IconButton(
+                          onPressed: () {
+                            Navigator.push(
+                              context,
+                              MaterialPageRoute(
+                                builder: (_) => const SubscriptionScreen(),
+                              ),
+                            );
+                          },
+                          icon: const Icon(
+                            Icons.workspace_premium,
+                            size: 22,
+                            color: Color(0xFFFFD700),
+                          ),
+                          style: IconButton.styleFrom(
+                            backgroundColor: const Color(
+                              0xFFFFD700,
+                            ).withOpacity(0.1),
+                            shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(12),
+                            ),
+                          ),
+                        ),
+                        const Gap(4),
+                        _buildProfileAvatar(context, ref),
                       ],
                     ),
                   ),
@@ -255,6 +284,134 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
             ),
           ),
         ),
+      ),
+    );
+  }
+
+  Widget _buildProfileAvatar(BuildContext context, WidgetRef ref) {
+    final user = Supabase.instance.client.auth.currentUser;
+    final avatarUrl = user?.userMetadata?['avatar_url'] as String?;
+
+    return PopupMenuButton<String>(
+      offset: const Offset(0, 48),
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+      color: AppTheme.surfaceColor,
+      onSelected: (value) async {
+        if (value == 'signout') {
+          await ref.read(authNotifierProvider.notifier).signOut();
+        } else if (value == 'delete') {
+          final confirmed = await showDialog<bool>(
+            context: context,
+            builder: (ctx) => AlertDialog(
+              backgroundColor: AppTheme.surfaceColor,
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(16),
+              ),
+              title: const Text(
+                'Delete Account',
+                style: TextStyle(color: Colors.white),
+              ),
+              content: const Text(
+                'Are you sure you want to delete your account? This action cannot be undone and all your data will be permanently removed.',
+                style: TextStyle(color: Colors.white70),
+              ),
+              actions: [
+                TextButton(
+                  onPressed: () => Navigator.pop(ctx, false),
+                  child: const Text('Cancel'),
+                ),
+                TextButton(
+                  onPressed: () => Navigator.pop(ctx, true),
+                  style: TextButton.styleFrom(foregroundColor: Colors.red),
+                  child: const Text('Delete'),
+                ),
+              ],
+            ),
+          );
+
+          if (confirmed == true && context.mounted) {
+            final error = await ref
+                .read(authNotifierProvider.notifier)
+                .deleteAccount();
+            if (error != null && context.mounted) {
+              ScaffoldMessenger.of(context).showSnackBar(
+                SnackBar(
+                  content: Text(error),
+                  backgroundColor: Colors.red.shade700,
+                ),
+              );
+            }
+          }
+        } else if (value == 'premium') {
+          Navigator.push(
+            context,
+            MaterialPageRoute(builder: (_) => const SubscriptionScreen()),
+          );
+        }
+      },
+      itemBuilder: (context) => [
+        PopupMenuItem(
+          enabled: false,
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                user?.userMetadata?['full_name'] ?? 'User',
+                style: const TextStyle(
+                  color: Colors.white,
+                  fontWeight: FontWeight.w600,
+                ),
+              ),
+              Text(
+                user?.email ?? '',
+                style: TextStyle(
+                  color: Colors.white.withOpacity(0.4),
+                  fontSize: 12,
+                ),
+              ),
+            ],
+          ),
+        ),
+        const PopupMenuDivider(),
+        const PopupMenuItem(
+          value: 'premium',
+          child: Row(
+            children: [
+              Icon(Icons.workspace_premium, color: Color(0xFFFFD700), size: 18),
+              Gap(8),
+              Text('Premium', style: TextStyle(color: Color(0xFFFFD700))),
+            ],
+          ),
+        ),
+        const PopupMenuDivider(),
+        const PopupMenuItem(
+          value: 'delete',
+          child: Row(
+            children: [
+              Icon(Icons.delete_forever, color: Colors.red, size: 18),
+              Gap(8),
+              Text('Delete Account', style: TextStyle(color: Colors.red)),
+            ],
+          ),
+        ),
+        const PopupMenuItem(
+          value: 'signout',
+          child: Row(
+            children: [
+              Icon(Icons.logout, color: Colors.redAccent, size: 18),
+              Gap(8),
+              Text('Sign Out', style: TextStyle(color: Colors.redAccent)),
+            ],
+          ),
+        ),
+      ],
+      child: CircleAvatar(
+        radius: 16,
+        backgroundColor: Colors.white.withOpacity(0.08),
+        backgroundImage: avatarUrl != null ? NetworkImage(avatarUrl) : null,
+        child: avatarUrl == null
+            ? const Icon(Icons.person, color: Colors.white54, size: 18)
+            : null,
       ),
     );
   }

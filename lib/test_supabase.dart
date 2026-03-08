@@ -16,6 +16,6 @@ Future<void> main() async {
     exit(0);
   } catch (e) {
     print('ERROR FETCHING APP CONFIG: $e');
-    exit(1);
+    exit(1); 
   }
 }

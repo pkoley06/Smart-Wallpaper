@@ -8,6 +8,7 @@ import 'package:smart_wallpaper/features/wallpapers/domain/usecases/get_similar_
 import 'package:smart_wallpaper/features/wallpapers/domain/usecases/get_wallpapers.dart';
 import 'package:smart_wallpaper/features/wallpapers/domain/usecases/search_external_wallpapers.dart';
 import 'package:smart_wallpaper/features/wallpapers/presentation/services/wallpaper_action_service.dart';
+import 'package:smart_wallpaper/features/wallpapers/presentation/services/download_tracking_service.dart';
 
 final sl = GetIt.instance;
 
@@ -33,4 +34,5 @@ Future<void> init() async {
 
   // Services
   sl.registerLazySingleton(() => WallpaperActionService());
+  sl.registerLazySingleton(() => DownloadTrackingService(sl()));
 }
